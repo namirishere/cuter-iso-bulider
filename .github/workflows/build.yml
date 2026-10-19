@@ -14,249 +14,50 @@ on:
           - linux-zen
           - linux-hardened
       desktop:
-        description: 'Choose Desktop Environment / Window Manager'
+        description: 'Choose Desktop (gnome, kde-plasma, xfce, mate, cinnamon, lxde, lxqt, budgie, pantheon, i3, sway, fluxbox, openbox)'
         required: true
-        default: 'none'
-        type: choice
-        options:
-          - none
-          - gnome
-          - kde-plasma
-          - xfce
-          - i3
-          - sway
-          - cosmic
-          - mate
-          - cinnamon
-          - lxde
-          - lxqt
-          - budgie
-          - pantheon
-          - fluxbox
-          - openbox
+        default: 'mate'
+        type: string
       browser:
-        description: 'Choose Web Browser'
+        description: 'Choose Browser (firefox, chromium, falkon, dillo)'
         required: true
         default: 'firefox'
-        type: choice
-        options:
-          - none
-          - firefox
-          - chromium
-          - falkon
-          - dillo
-      mail:
-        description: 'Choose Mail Client'
-        required: true
-        default: 'none'
-        type: choice
-        options:
-          - none
-          - thunderbird
-      media_player:
-        description: 'Choose Media Player'
-        required: true
-        default: 'vlc'
-        type: choice
-        options:
-          - none
-          - vlc
-          - mpv
-          - strawberry
-      office:
-        description: 'Choose Office Suite'
-        required: true
-        default: 'none'
-        type: choice
-        options:
-          - none
-          - libreoffice-fresh
-          - libreoffice-still
-      dock:
-        description: 'Choose Desktop Dock'
-        required: true
-        default: 'none'
-        type: choice
-        options:
-          - none
-          - plank
-          - cairo-dock
-      include_utilities:
-        description: 'Install System Utilities (GParted, Flatpak, Conky, VirtualBox Host Modules)?'
-        required: true
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
-      include_cli_tools:
-        description: 'Install Core CLI Tools (fastfetch, htop)?'
-        required: true
-        default: 'true'
-        type: choice
-        options:
-          - 'true'
-          - 'false'
+        type: string
       extra_apps:
-        description: 'Extra apps to install (space-separated, e.g., git neovim nano)'
+        description: 'Other tools (space-separated, e.g., thunderbird vlc mpv strawberry gparted flatpak conky virtualbox fastfetch htop)'
         required: false
         type: string
-        default: ''
+        default: 'thunderbird vlc mpv strawberry gparted flatpak conky virtualbox fastfetch htop'
 
 jobs:
   build:
     runs-on: ubuntu-latest
-    container:
-      image: archlinux:latest
-      options: --privileged
-
     steps:
+      # Step 1: Initialize code infrastructure
       - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: Install system dependencies
-        run: |
-          pacman -Syu --noconfirm
-          pacman -S --noconfirm archiso sed
+      # Step 2: Use a managed, pre-built ArchISO Action to handle the heavy lifting safely
+      - name: Build Arch Linux ISO Action
+        uses: antoniosantiagour/archiso-action@v2
+        with:
+          # Automatically uses the official upstream baseline template configuration
+          template: 'releng' 
+          # Safely injects the kernel, desktop packages, browser, and all utilities together
+          packages: |
+            ${{ inputs.kernel }}
+            ${{ inputs.desktop }}
+            ${{ inputs.browser }}
+            ${{ inputs.extra_apps }}
+            xorg-server
+            lightdm
+            lightdm-gtk-greeter
 
-      - name: Inject User Configurations dynamically
-        run: |
-          PACKAGES_FILE="./archiso-profile/packages.x86_64"
-          
-          # 1. Inject Chosen Kernel
-          echo "Injecting kernel: ${{ inputs.kernel }}"
-          echo "${{ inputs.kernel }}" >> $PACKAGES_FILE
-          
-          # SAFETY STEP: Automatically create the target systemd folder tree ahead of time
-          mkdir -p ./archiso-profile/airootfs/etc/systemd/system
-          
-          # 2. Inject Chosen DE / WM group and symlink the correct Display Manager
-          echo "Injecting desktop environment: ${{ inputs.desktop }}"
-          case "${{ inputs.desktop }}" in
-            gnome)
-              echo -e "gnome\ngnome-extra\ngdm" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/gdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            kde-plasma)
-              echo -e "plasma-desktop\nsddm\nkonsole\ndolphin" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/sddm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            xfce)
-              echo -e "xfce4\nxfce4-goodies\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            i3)
-              echo -e "i3-wm\ni3status\ndmenu\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            sway)
-              echo -e "sway\nswaylock\nswayidle\nwaybar\nalacritty\ndmenu" >> $PACKAGES_FILE
-              ;;
-            cosmic)
-              echo -e "cosmic-session\ncosmic-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/cosmic-greeter.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            mate)
-              echo -e "mate\nmate-extra\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            cinnamon)
-              echo -e "cinnamon\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            lxde)
-              echo -e "lxde\nxorg-server\nlxdm" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lxdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            lxqt)
-              echo -e "lxqt\nsddm\nxorg-server" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/sddm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            budgie)
-              echo -e "budgie\nbudgie-backgrounds\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            pantheon)
-              echo -e "pantheon\nxorg-server\nlightdm\npantheon-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            fluxbox)
-              echo -e "fluxbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            openbox)
-              echo -e "openbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
-              ;;
-            none)
-              echo "No graphical interface selected. Booting to CLI."
-              ;;
-          esac
-
-          # 3. Inject Web Browser Selection
-          if [ "${{ inputs.browser }}" != "none" ]; then
-            echo "Injecting web browser: ${{ inputs.browser }}"
-            echo "${{ inputs.browser }}" >> $PACKAGES_FILE
-          fi
-
-          # 4. Inject Mail Client Selection
-          if [ "${{ inputs.mail }}" != "none" ]; then
-            echo "Injecting mail client: ${{ inputs.mail }}"
-            echo "${{ inputs.mail }}" >> $PACKAGES_FILE
-          fi
-
-          # 5. Inject Media Player Selection
-          if [ "${{ inputs.media_player }}" != "none" ]; then
-            echo "Injecting media player: ${{ inputs.media_player }}"
-            echo "${{ inputs.media_player }}" >> $PACKAGES_FILE
-          fi
-
-          # 6. Inject Office Suite Selection
-          if [ "${{ inputs.office }}" != "none" ]; then
-            echo "Injecting office suite: ${{ inputs.office }}"
-            echo "${{ inputs.office }}" >> $PACKAGES_FILE
-          fi
-
-          # 7. Inject Dock Selection
-          if [ "${{ inputs.dock }}" != "none" ]; then
-            echo "Injecting desktop dock: ${{ inputs.dock }}"
-            echo "${{ inputs.dock }}" >> $PACKAGES_FILE
-          fi
-
-          # 8. Inject System Utilities
-          if [ "${{ inputs.include_utilities }}" = "true" ]; then
-            echo "Injecting utilities: gparted flatpak conky virtualbox virtualbox-host-dkms"
-            echo -e "gparted\nflatpak\nconky\nvirtualbox\nvirtualbox-host-dkms" >> $PACKAGES_FILE
-          fi
-
-          # 9. Inject CLI Tools
-          if [ "${{ inputs.include_cli_tools }}" = "true" ]; then
-            echo "Injecting CLI tools: fastfetch htop"
-            echo -e "fastfetch\nhtop" >> $PACKAGES_FILE
-          fi
-
-          # 10. Inject Miscellaneous Custom Text Box Input
-          if [ -n "${{ inputs.extra_apps }}" ]; then
-            echo "Injecting extra apps from textbox: ${{ inputs.extra_apps }}"
-            for app in ${{ inputs.extra_apps }}; do
-              echo "$app" >> $PACKAGES_FILE
-            done
-          fi
-          
-          # 11. Dynamically fix Bootloader configurations to use the selected Kernel
-          if [ "${{ inputs.kernel }}" != "linux" ]; then
-            find ./archiso-profile/ -type f -exec sed -i "s/vmlinuz-linux/vmlinuz-${{ inputs.kernel }}/g" {} +
-            find ./archiso-profile/ -type f -exec sed -i "s/initramfs-linux/initramfs-${{ inputs.kernel }}/g" {} +
-          fi
-
-      - name: Build the ISO Image
-        run: |
-          mkdir -p work_dir out_dir
-          mkarchiso -v -w ./work_dir -o ./out_dir ./archiso-profile
-
-      - name: Upload ISO as Artifact
+      # Step 3: Publish the completed bootable file
+      - name: Upload Finished ISO Image
         uses: actions/upload-artifact@v4
         with:
-          name: Arch-${{ inputs.kernel }}-${{ inputs.desktop }}-ISO
-          path: out_dir/*.iso
-          retention-days: 5
+          name: Custom-Arch-ISO
+          path: |
+            *.iso
+            out/*.iso
