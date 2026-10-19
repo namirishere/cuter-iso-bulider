@@ -114,22 +114,21 @@ jobs:
       - name: Install Official Build Tools
         run: |
           pacman -Syu --noconfirm
-          pacman -S --noconfirm archiso sed git
+          pacman -S --noconfirm archiso sed
 
-      - name: Download Official Upstream Profile Template
+      - name: Local Template Initialization
         run: |
-          # Clones safely using the verified GitHub mirror link for the Archiso source code
-          git clone --depth 1 https://github.com upstream-archiso
-          cp -r upstream-archiso/configs/releng/ ./build-profile
+          # Safe fallback setup using local system template directory pathing instead of internet links
+          cp -r /usr/share/archiso/configs/releng/ ./build-profile
 
       - name: Process Package Selections Natively
         run: |
           PACKAGES_FILE="./build-profile/packages.x86_64"
           
-          # Remove the default stock kernel line to prevent duplicate package failures
+          # Remove default standard kernel configuration lines
           sed -i '/^linux$/d' $PACKAGES_FILE
           
-          # 1. Inject Kernel
+          # 1. Inject Kernel configuration
           echo "${{ inputs.kernel }}" >> $PACKAGES_FILE
           
           # 2. Safely create systemd configurations directory to prevent path link errors
