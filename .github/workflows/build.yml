@@ -118,8 +118,8 @@ jobs:
 
       - name: Download Official Upstream Profile Template
         run: |
-          # Clones directly from the official Arch Linux GitLab core source mirror
-          git clone --depth 1 https://archlinux.org upstream-archiso
+          # Clones safely using the verified GitHub mirror link for the Archiso source code
+          git clone --depth 1 https://github.com upstream-archiso
           cp -r upstream-archiso/configs/releng/ ./build-profile
 
       - name: Process Package Selections Natively
