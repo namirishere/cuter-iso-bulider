@@ -154,10 +154,13 @@ jobs:
               echo -e "cosmic-session\ncosmic-greeter" >> $PACKAGES_FILE
               ln -sf /usr/lib/systemd/system/cosmic-greeter.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
               ;;
-            mate)
+              mate)
               echo -e "mate\nmate-extra\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              # Ensure the target systemd folder structure exists first
+              mkdir -p ./archiso-profile/airootfs/etc/systemd/system
               ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
               ;;
+
             cinnamon)
               echo -e "cinnamon\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
               ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
