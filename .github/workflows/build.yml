@@ -82,7 +82,7 @@ on:
           - plank
           - cairo-dock
       include_utilities:
-        description: 'Install System Utilities (GParted, Flatpak, Conky, VirtualBox)?'
+        description: 'Install System Utilities (GParted, Flatpak, Conky, VirtualBox Host Modules)?'
         required: true
         default: 'true'
         type: choice
@@ -127,12 +127,14 @@ jobs:
           echo "Injecting kernel: ${{ inputs.kernel }}"
           echo "${{ inputs.kernel }}" >> $PACKAGES_FILE
           
+          # SAFETY STEP: Automatically create the target systemd folder tree ahead of time
+          mkdir -p ./archiso-profile/airootfs/etc/systemd/system
+          
           # 2. Inject Chosen DE / WM group and symlink the correct Display Manager
           echo "Injecting desktop environment: ${{ inputs.desktop }}"
           case "${{ inputs.desktop }}" in
             gnome)
               echo -e "gnome\ngnome-extra\ngdm" >> $PACKAGES_FILE
-              mkdir -p ./archiso-profile/airootfs/etc/systemd/system/display-manager.service.d
               ln -sf /usr/lib/systemd/system/gdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
               ;;
             kde-plasma)
@@ -154,13 +156,10 @@ jobs:
               echo -e "cosmic-session\ncosmic-greeter" >> $PACKAGES_FILE
               ln -sf /usr/lib/systemd/system/cosmic-greeter.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
               ;;
-              mate)
+            mate)
               echo -e "mate\nmate-extra\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
-              # Ensure the target systemd folder structure exists first
-              mkdir -p ./archiso-profile/airootfs/etc/systemd/system
               ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
               ;;
-
             cinnamon)
               echo -e "cinnamon\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
               ln -sf /usr/lib/systemd/system/lightdm.service ./archiso-profile/airootfs/etc/systemd/system/display-manager.service
@@ -224,13 +223,13 @@ jobs:
             echo "${{ inputs.dock }}" >> $PACKAGES_FILE
           fi
 
-          # 8. Inject System Utilities (GParted, Flatpak, Conky, VirtualBox Host Modules)
+          # 8. Inject System Utilities
           if [ "${{ inputs.include_utilities }}" = "true" ]; then
             echo "Injecting utilities: gparted flatpak conky virtualbox virtualbox-host-dkms"
             echo -e "gparted\nflatpak\nconky\nvirtualbox\nvirtualbox-host-dkms" >> $PACKAGES_FILE
           fi
 
-          # 9. Inject CLI Monitoring and Info Tools
+          # 9. Inject CLI Tools
           if [ "${{ inputs.include_cli_tools }}" = "true" ]; then
             echo "Injecting CLI tools: fastfetch htop"
             echo -e "fastfetch\nhtop" >> $PACKAGES_FILE
