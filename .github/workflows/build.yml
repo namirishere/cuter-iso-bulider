@@ -82,7 +82,7 @@ on:
           - plank
           - cairo-dock
       include_utilities:
-        description: 'Install Utilities (GParted, Flatpak, Conky, VirtualBox)?'
+        description: 'Install System Utilities (GParted, Flatpak, Conky, VirtualBox)?'
         required: true
         default: 'true'
         type: choice
@@ -98,7 +98,7 @@ on:
           - 'true'
           - 'false'
       extra_apps:
-        description: 'Extra apps space-separated'
+        description: 'Extra apps to install (space-separated)'
         required: false
         type: string
         default: ''
@@ -106,78 +106,127 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository code
-        uses: actions/checkout@v4
+    container:
+      image: archlinux:latest
+      options: --privileged
 
-      - name: Parse User Inputs to Build Configuration
+    steps:
+      - name: Install Official Build Tools
         run: |
-          # Create a clean text bundle for all user choices
-          echo "Injecting selections safely..."
+          pacman -Syu --noconfirm
+          pacman -S --noconfirm archiso sed git
+
+      - name: Download Official Upstream Profile Template
+        run: |
+          # Clones directly from the official Arch Linux GitLab core source mirror
+          git clone --depth 1 https://archlinux.org upstream-archiso
+          cp -r upstream-archiso/configs/releng/ ./build-profile
+
+      - name: Process Package Selections Natively
+        run: |
+          PACKAGES_FILE="./build-profile/packages.x86_64"
           
-          # Initialize package build list configuration
-          echo "" > user_packages.txt
+          # Remove the default stock kernel line to prevent duplicate package failures
+          sed -i '/^linux$/d' $PACKAGES_FILE
           
-          # Add individual package configurations safely
-          echo "${{ inputs.kernel }}" >> user_packages.txt
+          # 1. Inject Kernel
+          echo "${{ inputs.kernel }}" >> $PACKAGES_FILE
           
-          # Handle desktop matching definitions cleanly
+          # 2. Safely create systemd configurations directory to prevent path link errors
+          mkdir -p ./build-profile/airootfs/etc/systemd/system
+          
+          # 3. Inject Desktop Selection and set up standard Display Manager symlinks
           case "${{ inputs.desktop }}" in
-            gnome) echo -e "gnome\ngnome-extra\ngdm" >> user_packages.txt ;;
-            kde-plasma) echo -e "plasma-desktop\nsddm\nkonsole\ndolphin" >> user_packages.txt ;;
-            xfce) echo -e "xfce4\nxfce4-goodies\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            i3) echo -e "i3-wm\ni3status\ndmenu\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            sway) echo -e "sway\nswaylock\nswayidle\nwaybar\nalacritty\ndmenu" >> user_packages.txt ;;
-            cosmic) echo -e "cosmic-session\ncosmic-greeter" >> user_packages.txt ;;
-            mate) echo -e "mate\nmate-extra\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            cinnamon) echo -e "cinnamon\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            lxde) echo -e "lxde\nxorg-server\nlxdm" >> user_packages.txt ;;
-            lxqt) echo -e "lxqt\nsddm\nxorg-server" >> user_packages.txt ;;
-            budgie) echo -e "budgie\nbudgie-backgrounds\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            pantheon) echo -e "pantheon\nxorg-server\nlightdm\npantheon-greeter" >> user_packages.txt ;;
-            fluxbox) echo -e "fluxbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
-            openbox) echo -e "openbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> user_packages.txt ;;
+            gnome)
+              echo -e "gnome\ngnome-extra\ngdm" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/gdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            kde-plasma)
+              echo -e "plasma-desktop\nsddm\nkonsole\ndolphin" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/sddm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            xfce)
+              echo -e "xfce4\nxfce4-goodies\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            i3)
+              echo -e "i3-wm\ni3status\ndmenu\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            sway)
+              echo -e "sway\nswaylock\nswayidle\nwaybar\nalacritty\ndmenu" >> $PACKAGES_FILE
+              ;;
+            cosmic)
+              echo -e "cosmic-session\ncosmic-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/cosmic-greeter.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            mate)
+              echo -e "mate\nmate-extra\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            cinnamon)
+              echo -e "cinnamon\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            lxde)
+              echo -e "lxde\nxorg-server\nlxdm" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lxdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            lxqt)
+              echo -e "lxqt\nsddm\nxorg-server" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/sddm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            budgie)
+              echo -e "budgie\nbudgie-backgrounds\nxorg-server\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            pantheon)
+              echo -e "pantheon\nxorg-server\nlightdm\npantheon-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            fluxbox)
+              echo -e "fluxbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
+            openbox)
+              echo -e "openbox\nxorg-server\nxterm\nlightdm\nlightdm-gtk-greeter" >> $PACKAGES_FILE
+              ln -sf /usr/lib/systemd/system/lightdm.service ./build-profile/airootfs/etc/systemd/system/display-manager.service
+              ;;
           esac
-          
-          # Add applications arrays securely if specified
-          if [ "${{ inputs.browser }}" != "none" ]; then echo "${{ inputs.browser }}" >> user_packages.txt; fi
-          if [ "${{ inputs.mail }}" != "none" ]; then echo "${{ inputs.mail }}" >> user_packages.txt; fi
-          if [ "${{ inputs.media_player }}" != "none" ]; then echo "${{ inputs.media_player }}" >> user_packages.txt; fi
-          if [ "${{ inputs.office }}" != "none" ]; then echo "${{ inputs.office }}" >> user_packages.txt; fi
-          if [ "${{ inputs.dock }}" != "none" ]; then echo "${{ inputs.dock }}" >> user_packages.txt; fi
+
+          # 4. Inject Extracted Options Safely
+          if [ "${{ inputs.browser }}" != "none" ]; then echo "${{ inputs.browser }}" >> $PACKAGES_FILE; fi
+          if [ "${{ inputs.mail }}" != "none" ]; then echo "${{ inputs.mail }}" >> $PACKAGES_FILE; fi
+          if [ "${{ inputs.media_player }}" != "none" ]; then echo "${{ inputs.media_player }}" >> $PACKAGES_FILE; fi
+          if [ "${{ inputs.office }}" != "none" ]; then echo "${{ inputs.office }}" >> $PACKAGES_FILE; fi
+          if [ "${{ inputs.dock }}" != "none" ]; then echo "${{ inputs.dock }}" >> $PACKAGES_FILE; fi
           
           if [ "${{ inputs.include_utilities }}" = "true" ]; then
-            echo -e "gparted\nflatpak\nconky\nvirtualbox\nvirtualbox-host-dkms" >> user_packages.txt
+            echo -e "gparted\nflatpak\nconky\nvirtualbox\nvirtualbox-host-dkms" >> $PACKAGES_FILE
           fi
           
           if [ "${{ inputs.include_cli_tools }}" = "true" ]; then
-            echo -e "fastfetch\nhtop" >> user_packages.txt
+            echo -e "fastfetch\nhtop" >> $PACKAGES_FILE
           fi
           
           if [ -n "${{ inputs.extra_apps }}" ]; then
-            for app in ${{ inputs.extra_apps }}; do echo "$app" >> user_packages.txt; done
+            for app in ${{ inputs.extra_apps }}; do echo "$app" >> $PACKAGES_FILE; done
           fi
           
-          # Save list formatting to step variables block
-          echo "USER_PACKAGES<<EOF" >> $GITHUB_ENV
-          cat user_packages.txt >> $GITHUB_ENV
-          echo "EOF" >> $GITHUB_ENV
+          # 5. Fix bootloader kernel names dynamically if an alternative kernel is picked
+          if [ "${{ inputs.kernel }}" != "linux" ]; then
+            find ./build-profile/ -type f -exec sed -i "s/vmlinuz-linux/vmlinuz-${{ inputs.kernel }}/g" {} +
+            find ./build-profile/ -type f -exec sed -i "s/initramfs-linux/initramfs-${{ inputs.kernel }}/g" {} +
+          fi
 
-      - name: Managed Arch ISO Builder Engine
-        uses: antoniosantiagour/archiso-action@v2
-        with:
-          template: 'releng'
-          # This maps the user selections seamlessly without file path interactions
-          packages: |
-            ${{ env.USER_PACKAGES }}
-            xorg-server
-            lightdm
-            lightdm-gtk-greeter
+      - name: Build the ISO Image
+        run: |
+          mkdir -p work_dir out_dir
+          mkarchiso -v -w ./work_dir -o ./out_dir ./build-profile
 
-      - name: Upload Completed ISO Artifact
+      - name: Upload Finished ISO Image
         uses: actions/upload-artifact@v4
         with:
-          name: Arch-Custom-ISO
-          path: |
-            *.iso
-            out/*.iso
+          name: Arch-${{ inputs.kernel }}-${{ inputs.desktop }}-ISO
+          path: out_dir/*.iso
+          retention-days: 5
